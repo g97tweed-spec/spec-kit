@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "docs",
+      "runtimeExecutable": "docfx",
+      "runtimeArgs": ["docs/docfx.json", "--serve"],
+      "port": 8080
+    }
+  ]
+}
