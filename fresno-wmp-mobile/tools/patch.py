@@ -17,11 +17,33 @@ import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
-SRC = ROOT / "Gavin_schedule_MOBILE.snapshot.html"
-OUT = ROOT / "Gavin_schedule_MOBILE.live.html"        # standalone, for OneDrive
-FRAG = ROOT / "Gavin_schedule_MOBILE.artifact.html"   # fragment, for publishing
 LIVE = HERE / "live.js"
 CSS = HERE / "live.css"
+
+DEFAULT_SRC = ROOT / "Gavin_schedule_MOBILE.snapshot.html"
+
+# Symbols the live layer calls into. Both boards were cut from the same
+# codebase, but "both boards look the same inside" is an assumption, and the
+# cost of it being wrong is a page that loads and then silently fails to
+# refresh. Checked up front, by name, with the failure naming what is missing.
+REQUIRED = [
+    ("TAGS", "the tag array the feed replaces"),
+    ("AFWS", "the clearance array the feed replaces"),
+    ("PAL", "the palette the clearance colours come from"),
+    ("AFWCOL", "the clearance colour map"),
+    ("NOTREADY", "the readiness set the tag sheet draws from"),
+    ("PRESET", "the default crew lanes"),
+    ("state", "the saved board state"),
+    ("KEY", "the localStorage key the saved state lives under"),
+    ("SNAPSHOT", "the date the hardcoded data was read"),
+    ("TODAY", "the device clock"),
+    ("render", "the repaint entry point"),
+    ("esc", "the HTML escaper"),
+    ("daysBetween", "the date arithmetic the banner reports with"),
+    ("tagsOn", "the per-day tag lookup"),
+    ("defaultDay", "the opening day chooser"),
+    ("monthIndexFor", "the opening month chooser"),
+]
 
 # The boot block, replaced wholesale. The original awaited load() and rendered
 # the snapshot; the live one renders the snapshot first and then upgrades it,
@@ -73,16 +95,46 @@ def fail(msg):
     sys.exit("patch.py: " + msg)
 
 
-def main():
-    if not SRC.exists():
-        fail("missing snapshot at " + str(SRC))
-    html = SRC.read_text(encoding="utf-8")
+def preflight(html):
+    """Every symbol live.js reaches for must already exist in the page, and be
+    declared before the boot block where the live layer is spliced in."""
+    missing = []
+    for name, why in REQUIRED:
+        # a declaration, not a mention: `const TAGS=`, `let state=`,
+        # `function render(`, `var x =` — whitespace tolerated
+        decl = re.search(r"\b(?:const|let|var)\s+%s\b\s*=" % re.escape(name), html) \
+            or re.search(r"\bfunction\s+%s\s*\(" % re.escape(name), html)
+        if not decl:
+            missing.append("  %-14s %s" % (name, why))
+    if missing:
+        fail("this page does not declare everything the live layer needs:\n"
+             + "\n".join(missing)
+             + "\n\nThe live layer drives the board through these. Port it by hand "
+               "rather than letting patch.py splice into a page it does not fit.")
+
+
+def main(argv):
+    src = pathlib.Path(argv[0]).resolve() if argv else DEFAULT_SRC
+    if not src.exists():
+        fail("no such file: " + str(src))
+    # Gavin_schedule_DESK.snapshot.html -> Gavin_schedule_DESK.{live,artifact}.html
+    stem = src.name
+    for suffix in (".snapshot.html", ".html"):
+        if stem.endswith(suffix):
+            stem = stem[: -len(suffix)]
+            break
+    out = src.parent / (stem + ".live.html")
+    frag = src.parent / (stem + ".artifact.html")
+
+    html = src.read_text(encoding="utf-8")
     live = LIVE.read_text(encoding="utf-8")
+    preflight(html)
 
     # 1. The live module goes in just before the boot block, so every helper it
     #    leans on (TAGS, AFWS, state, render, esc, PAL, AFWCOL) is defined.
     if BOOT_OLD not in html:
-        fail("boot block not found — the snapshot's GO section has changed")
+        fail("boot block not found — this page does not open the way the mobile "
+             "board does, so the live layer has nowhere to hook in")
     html = html.replace(BOOT_OLD, live.rstrip() + "\n\n" + BOOT_NEW, 1)
 
     # 2. staleBanner is dead: the live layer owns the banner now. Left defined
@@ -111,12 +163,12 @@ def main():
         1,
     )
 
-    OUT.write_text(html, encoding="utf-8")
-    FRAG.write_text(fragment(html), encoding="utf-8")
-    base = len(SRC.read_text(encoding="utf-8"))
-    print("wrote %s (%d bytes, +%d over snapshot)" % (OUT.name, len(html), len(html) - base))
-    print("wrote %s (%d bytes)" % (FRAG.name, len(FRAG.read_text(encoding="utf-8"))))
+    out.write_text(html, encoding="utf-8")
+    frag.write_text(fragment(html), encoding="utf-8")
+    base = len(src.read_text(encoding="utf-8"))
+    print("%s -> %s (%d bytes, +%d) and %s"
+          % (src.name, out.name, len(html), len(html) - base, frag.name))
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])
