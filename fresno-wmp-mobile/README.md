@@ -99,3 +99,11 @@ crew lane, or give two overlapping clearance windows the same colour.
   it is never blank while waiting.
 - Work verification, the job-package scans and the landing-zone detail are
   still snapshot data. They are not in `caldata.json`.
+
+## Scheduled freshness check
+
+The board reports its own age on every open, which covers the case where
+someone is looking at it. `tools/freshness-routine.md` is the other half — a
+twice-daily push when the pipeline has gone stale while nobody is. It has to be
+created from the claude.ai Routines UI: a routine created from a Claude Code
+session cannot be granted the Microsoft 365 connector, so it would fire blind.
