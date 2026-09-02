@@ -1,18 +1,25 @@
-# Twice-daily freshness check — create this from the claude.ai Routines UI
+# Twice-daily freshness check
 
-The board tells the truth about its own age every time it is opened, so this
-routine is the proactive half: it pushes a notification when the pipeline has
-gone stale while nobody is looking at the board.
+The boards tell the truth about their own age every time they are opened, so
+this routine is the proactive half: it pushes a notification when the pipeline
+has gone stale while nobody is looking.
 
-It has to be created from the claude.ai Routines UI (or any session that holds
-the connector). A routine created from a Claude Code session cannot be granted
-the Microsoft 365 connector, so it would fire with no SharePoint access and
-report nothing useful. The existing "Fresno WMP KML — daily 6am refresh" routine
-is the working example of the same pattern.
+**Live as `trig_019Rsd5HyjBDxYz4oZFsNnQn`**, created 2026-09-02.
 
-**Schedule:** `0 12,21 * * 1-5` — 05:00 and 14:00 Pacific, weekdays.
-**Notifications:** push on, email off.
-**New session on each firing.**
+- **Schedule** `0 12,21 * * 1-5` — 05:00 and 14:00 Pacific, weekdays
+- **Notifications** push on, email off
+- **New session on each firing**
+
+Creating it from a Claude Code session logs a warning that the routine stores no
+MCP connectors and will fire without them. A manual test fire returned
+SUCCEEDED, but a session cannot read another session's transcript, so whether
+the Microsoft 365 tools were actually available has to be read from the run
+itself. If a firing reports it could not reach SharePoint, delete the routine
+and recreate it from the claude.ai Routines UI with the prompt below — the
+existing "Fresno WMP KML — daily 6am refresh" routine is the working example of
+the same pattern.
+
+The prompt as it stands:
 
 ---
 
