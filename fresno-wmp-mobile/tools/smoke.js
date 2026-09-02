@@ -206,6 +206,83 @@ async function run() {
        ev(second.dom, 'JSON.stringify(state.place["' + notif + '"])'));
   }
 
+  /* ---- 5. the trimmed feed ---------------------------------------------- */
+  console.log("\n5. pipeline emits the trimmed feed");
+  {
+    /* Shape mirrors pipeline/mobile_feed.py: short keys, empty fields omitted,
+       `v` stamped so the board picks the reader by shape rather than filename. */
+    const trimmed = {
+      v: 1, src: "caldata.json", generated: DAY, swept: DAY + "T14:02:00Z",
+      tracker: "WMP Fresno Dependency Tracker 9-14-26.xlsm", tab: "9.14.26",
+      win: [DAY, DAY],
+      days: { [DAY]: [
+        { n: "133636998", st: "021/401", ln: "COPUS-OLD RIVER", mat: "921", w: "JIT INST SHNT",
+          kv: "70", hq: "Bakersfield", sev: "bad", ss: DAY, se: DAY,
+          f: ["No outage covers the planned date", "Readiness gate not met"], nr: 1 },
+        { n: "131176541", st: "016/266", ln: "COPUS-OLD RIVER", mat: "ICW", w: "RPR CNDW",
+          kv: "70", hq: "Bakersfield", sev: "ok", at: 1 }
+      ]},
+      clr: [
+        { id: "AFW-T26-009001", ty: "T-line clearance", ln: "COPUS-OLD RIVER", d0: DAY, d1: DAY,
+          win: "07:00-17:00", pts: "016/266 to 017/293", why: "Shunt splice", st: ["016/266"],
+          src: "Clearance — pge — " + DAY },
+        { id: "AFW-26-0099002", ty: "Distribution NTO", ln: "COPUS-OLD RIVER", d0: DAY, d1: DAY,
+          win: "08:00-16:00", x: 1 }
+      ],
+      open: [{ item: "LZ02 right of way", detail: "BLM approval outstanding", who: "Stantec" }],
+      n_tags: 2, n_clr: 2
+    };
+    const asked = [];
+    const stub = { use: async n => n !== "mcp" ? null : {
+      callTool: async (s, t, i) => {
+        const name = i.uri.split("/").pop();
+        asked.push(name);
+        if (name === "_last_run.json") return { payload: { last_build: DAY } };
+        if (name === "mobile_feed.json") return { payload: trimmed };
+        throw { code: "tool_error", message: "should not have been asked for " + name };
+      }
+    }};
+    const { dom, errors } = makeDom(stub, {});
+    await settle();
+    ok(errors.length === 0, "no page errors", errors[0]);
+    ok(asked.indexOf("mobile_feed.json") >= 0, "asks for the trimmed feed", asked.join(","));
+    ok(asked.indexOf("caldata.json") < 0,
+       "and does not also pull the 1.4 MB payload once the trim answers", asked.join(","));
+    ok(counts(dom).tags === 2 && counts(dom).afws === 2, "board reads the trimmed shape",
+       JSON.stringify(counts(dom)));
+    ok(/Up to date/.test(bar(dom)) && /9\.14\.26/.test(bar(dom)),
+       "banner reads the same off either format", bar(dom).slice(0, 80));
+    ok(ev(dom, 'TAGS[0].flag') === "No outage covers the planned date",
+       "flag line is the pipeline's own words", ev(dom, 'TAGS[0].flag'));
+    ok(ev(dom, 'NOTREADY.has("133636998")') === true,
+       "readiness set is rebuilt from the feed, not left on snapshot values");
+    ok(ev(dom, 'NOTREADY.has("133366379")') === false,
+       "and a snapshot tag the feed no longer flags is cleared");
+    ok(ev(dom, 'TAGS[0].pri') === "", "priority stays blank when nothing knows it",
+       ev(dom, 'TAGS[0].pri'));
+    ok(ev(dom, 'AFWS[1].cancelled') === true, "cancelled clearance stays cancelled");
+    ok(/021\/401/.test(dom.window.document.body.textContent), "trimmed tag rendered on the board");
+  }
+
+  /* ---- 6. trimmed feed missing, caldata still there ---------------------- */
+  console.log("\n6. build made before the trim step existed");
+  {
+    const stub = { use: async n => n !== "mcp" ? null : {
+      callTool: async (s, t, i) => {
+        const name = i.uri.split("/").pop();
+        if (name === "_last_run.json") return { payload: { last_build: DAY } };
+        if (name === "caldata.json") return { payload: payload(DAY) };
+        throw { code: "tool_error", message: "no such file" };
+      }
+    }};
+    const { dom, errors } = makeDom(stub, {});
+    await settle();
+    ok(errors.length === 0, "no page errors", errors[0]);
+    ok(counts(dom).tags === 2, "falls through to caldata.json and still goes live",
+       String(counts(dom).tags));
+    ok(/Up to date/.test(bar(dom)), "banner still reports up to date", bar(dom).slice(0, 60));
+  }
+
   console.log("\n" + pass + " passed, " + fail + " failed");
   process.exit(fail ? 1 : 0);
 }

@@ -34,9 +34,13 @@ const LIVE = {
   tool: "read_resource",
   drive: "b!PRd2jUqlgUaMUN0sE5o2GNcEPkwp9rFDrMOpOikwnBOuBzwAhU8EQJgZcl3V4FMT",
   root: "Everything Folder/WMP_Fresno_Tracker/data",
-  /* Tried in order. The pipeline has renamed its payload before; the first
-     file that parses and carries a day map wins. */
-  feeds: ["caldata.json", "cal3_payload.json"],
+  /* Tried in order, first that parses and carries a day map wins.
+     mobile_feed.json is what pipeline/mobile_feed.py writes for this board —
+     the same data as caldata.json with everything the phone does not draw
+     taken out, so it is a fraction of the size over a connector on LTE.
+     caldata.json stays as the fallback for a build made before that step was
+     added to the runbook, or a run where it did not get that far. */
+  feeds: ["mobile_feed.json", "caldata.json", "cal3_payload.json"],
   stamp: "_last_run.json",
   cacheKey: "fresno-wmp-live-v1",
   state: "boot"      /* boot | live | cached | snapshot */
@@ -90,6 +94,46 @@ function ago(iso){
 const SNAP_PRI={};
 TAGS.forEach(function(x){ SNAP_PRI[x.id]=x.pri; });
 
+/* The trimmed feed, written by pipeline/mobile_feed.py. Short keys, empty
+   fields omitted, and only the flags the board has somewhere to show. Its
+   shape is the board's, so this reader is a rename rather than a transform. */
+function fromTrim(D){
+  const tags=[], afws=[], seen={};
+
+  Object.keys(D.days||{}).forEach(function(date){
+    (D.days[date]||[]).forEach(function(x){
+      const id=String(x.n);
+      if(seen[id])return;
+      seen[id]=1;
+      const f=x.f||[];
+      tags.push({
+        id:id, notif:id,
+        line:x.ln||"", st:x.st||"", w:x.w||"", mat:x.mat||"",
+        pri:SNAP_PRI[id]||"", d:date,
+        flag:f.length?f[0]:"", flags:f,
+        sev:x.sev||"", anytime:!!x.at, notready:!!x.nr,
+        kv:x.kv||"", hq:x.hq||"", ss:x.ss||"", se:x.se||""
+      });
+    });
+  });
+
+  (D.clr||[]).forEach(function(c){
+    if(!c||!c.d0)return;
+    afws.push({
+      no:String(c.id||""), kind:c.ty||"Type not stated", ckt:c.ln||"",
+      d0:c.d0, t0:"", d1:c.d1||c.d0, t1:"",
+      window:c.win||"", scope:(c.st||[]).join(", "),
+      note:c.note||"", purpose:c.why||"", cancelled:!!c.x, src:c.src||""
+    });
+  });
+
+  return {
+    tags:tags, afws:afws, open:D.open||[],
+    generated:D.generated||"", swept:D.swept||"",
+    tracker:D.tracker||"", tab:D.tab||"", win:D.win||null
+  };
+}
+
 function fromFeed(D){
   const tags=[], afws=[], seen={};
 
@@ -112,6 +156,7 @@ function fromFeed(D){
         flag:fl.length?fl[0].t:"",
         sev:x.sev||"",
         anytime:!!x.anytime,
+        notready:(x.flags||[]).some(function(f){return f.code==="NOT_READY";}),
         kv:x.kv||"", hq:x.hq||"",
         ss:x.ss||"", se:x.se||"",
         flags:x.flags||[],
@@ -180,6 +225,14 @@ function applyFeed(F){
   TAGS.forEach(function(x){
     state.place[x.id]={ d:x.d, lane:lanes[x.id]||PRESET[x.id]||"unassigned" };
   });
+
+  /* NOTREADY is the snapshot's readiness set, and the tag sheet draws a
+     "Not ready" box off it. Left alone after a swap it would keep flagging
+     tags the pipeline has since cleared and miss ones it has newly failed, so
+     it is rebuilt from the feed — which is the authority on readiness once we
+     are reading it at all. */
+  NOTREADY.clear();
+  TAGS.forEach(function(t){ if(t.notready)NOTREADY.add(t.id); });
 
   recolorAFW();
   return true;
@@ -286,7 +339,10 @@ async function goLive(){
     try{
       const got=await readJSON(mcp,LIVE.feeds[i]);
       if(got.data&&got.data.days&&Object.keys(got.data.days).length){
-        feed=fromFeed(got.data);
+        /* `v` is only on the trimmed feed; caldata.json has no version stamp.
+           Read by shape, not by filename, so a renamed file still lands in the
+           right reader. */
+        feed=got.data.v?fromTrim(got.data):fromFeed(got.data);
         feed._file=LIVE.feeds[i];
         feed._at=got.at;
       }
@@ -304,7 +360,15 @@ async function goLive(){
       "<b>"+(behind>=3?"Live read, but the pipeline is "+behind+" days behind.":"Up to date.")+"</b> "+
       "Pipeline last built "+esc(built||"unknown")+
       (swept?", mail swept to "+esc(String(swept).replace("T"," ").replace("Z"," UTC")):"")+". "+
-      (stamp&&stamp.tracker_file?"Tracker "+esc(stamp.tracker_file)+" tab "+esc(stamp.tracker_tab||"?")+". ":"")+
+      /* The feed records the tracker it was actually built from; the stamp
+         records the last run of the pipeline as a whole. They agree on a clean
+         build and the feed is the better answer when they do not, because it
+         is the file on screen. */
+      (function(){
+        const tf=feed.tracker||(stamp&&stamp.tracker_file)||"";
+        const tt=feed.tab||(stamp&&stamp.tracker_tab)||"";
+        return tf?"Tracker "+esc(tf)+(tt?" tab "+esc(tt):"")+". ":"";
+      })()+
       TAGS.length+" tags, "+AFWS.length+" outage documents."+
       (behind>=3?"<br>Nothing newer exists to read — the sweep has to be run on the Windows box before this page can show anything fresher.":""));
     return;

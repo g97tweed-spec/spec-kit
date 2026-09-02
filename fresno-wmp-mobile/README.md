@@ -11,17 +11,20 @@ tooling is here; `.gitignore` keeps the pages out.
 ## What actually refreshes, and what does not
 
 ```
- Windows box                     OneDrive                    phone
- ───────────                     ────────                    ─────
- pipeline sweep    ──writes──▶   data/caldata.json  ──read──▶  board, on open
- (Outlook COM,                   data/_last_run.json
-  openpyxl, merge.py)
+ Windows box                          OneDrive                   phone
+ ───────────                          ────────                   ─────
+ pipeline sweep  ──▶ merge.py  ──▶    data/caldata.json          (1.4 MB, desktop)
+ (Outlook COM,       build.py           │
+  openpyxl)          kmz.py             ├─ mobile_feed.py ─▶ data/mobile_feed.json
+                     mobile_feed.py     │                        │
+                                        data/_last_run.json ─────┴──read──▶ board, on open
 ```
 
-The board reads `caldata.json` — the pipeline's reconciled output — through the
-viewer's own Microsoft 365 connector, every time the page is opened. Whatever
-the last sweep concluded is what the board shows, and the banner across the top
-says when that sweep ran.
+The board reads `mobile_feed.json` — the pipeline's reconciled output with
+everything the phone does not draw taken out — through the viewer's own
+Microsoft 365 connector, every time the page is opened. Whatever the last sweep
+concluded is what the board shows, and the banner across the top says when that
+sweep ran.
 
 **Opening the page cannot make the pipeline run.** The sweep needs Classic
 Outlook and Desktop Commander on the Windows box; nothing in the cloud can
@@ -42,6 +45,42 @@ clearances is worse than no board.
 Connector failures are reported by cause, not as one generic message: a lapsed
 token says to reconnect in claude.ai Settings → Connectors, a missing connector
 says to add it, an unreachable SharePoint says so.
+
+## The trimmed feed
+
+`tools/mobile_feed.py` is a pipeline step. Copy it to `<root>/pipeline/` and run
+it after `merge.py`:
+
+```
+python3 merge.py
+python3 build.py
+python3 kmz.py
+python3 mobile_feed.py     # writes data/mobile_feed.json
+```
+
+It projects `caldata.json` down to the fields the board renders — dropping the
+per-organisation "who says what" block, the line-conflict table, the coverage
+stats, the info-level flags, and the copy of each covering clearance that sits
+inside every tag that rides it. On the test fixture that is 38% of the original;
+on a real build, where the `sources` block is much heavier, it is nearer 15%.
+The script prints the actual figure on every run.
+
+**It is a projection, not a derivation.** Every value is copied unchanged.
+Nothing is estimated, interpolated or re-derived. Two fields come close and
+neither crosses the line: `f` keeps the verbatim text of flags the pipeline
+already marked bad or warn, and `nr` restates the pipeline's own `NOT_READY`
+flag as a boolean.
+
+Before writing, it re-counts. If the tag count, the notification set, the day
+set or the clearance count differs from `caldata.json`, it exits without
+writing. A trimmed feed that has quietly lost a day's work is worse than no
+trimmed feed, because the board would render the short list as though it were
+the whole day. The write itself is atomic, so a board reading mid-run never
+sees half a file.
+
+The board tries `mobile_feed.json`, then `caldata.json`, then
+`cal3_payload.json`, and picks its reader by shape — the trimmed feed carries a
+`v` stamp — so a build made before this step existed still works.
 
 ## Data mapping
 
@@ -68,8 +107,9 @@ arrived with the feed and were never in the snapshot.
 ## Build
 
 ```bash
-python3 tools/patch.py     # snapshot -> .live.html (standalone) + .artifact.html (fragment)
-node tools/smoke.js        # 20 checks across the four states
+python3 tools/patch.py            # snapshot -> .live.html (standalone) + .artifact.html (fragment)
+node tools/smoke.js               # 34 checks across the six states
+python3 tools/test_mobile_feed.py # 23 checks on the trimmer and its guards
 ```
 
 `patch.py` takes `Gavin_schedule_MOBILE.snapshot.html` as input and never edits
@@ -94,9 +134,10 @@ crew lane, or give two overlapping clearance windows the same colour.
 
 - The board reads one file. If the pipeline renames its payload, `LIVE.feeds`
   in `tools/live.js` lists the candidates tried in order.
-- `caldata.json` is ~1.4 MB. It crosses the connector on every cold open;
-  the result is cached per device, and the page renders the snapshot first so
-  it is never blank while waiting.
+- The feed crosses the connector on every cold open. The result is cached per
+  device, and the page renders the snapshot first so it is never blank while
+  waiting. If `mobile_feed.py` is not in the build, the board falls back to the
+  full 1.4 MB `caldata.json`.
 - Work verification, the job-package scans and the landing-zone detail are
   still snapshot data. They are not in `caldata.json`.
 
