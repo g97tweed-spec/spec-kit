@@ -1,0 +1,6 @@
+# The built and source boards carry live PG&E operational data — notification
+# numbers, structure IDs, clearance windows, and named contacts with their
+# phone numbers and email addresses. This repository is public. Only the build
+# tooling belongs here; the pages themselves stay in OneDrive and the private
+# published artifact.
+*.html

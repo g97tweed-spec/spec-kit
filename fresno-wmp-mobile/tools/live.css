@@ -1,0 +1,13 @@
+/* ---------- live-data banner (both boards) ----------
+   Sits above the board, replacing the old stale-snapshot bar. Four states, each
+   with its own weight: green reads as "go", amber as "check the date on this",
+   red as "you are looking at old work". Light values here; the field board
+   redefines them for dark in theme-mobile.css. The desk calendar is a
+   deliberately light, print-style page and keeps these as they are. */
+#liveBar{padding:9px 14px;font-size:12.5px;line-height:1.4;text-align:left;
+  background:var(--lbBg);color:var(--lbFg);border-bottom:1px solid var(--lbBd)}
+#liveBar b{font-weight:650}
+#liveBar.lb-live{--lbBg:#e8f5ec;--lbFg:#17512c;--lbBd:#b6dcc4}
+#liveBar.lb-warn{--lbBg:#fdf0d8;--lbFg:#5a3a10;--lbBd:#e0c088}
+#liveBar.lb-bad {--lbBg:#fbe9e9;--lbFg:#6b1f1f;--lbBd:#e3b3b3}
+#liveBar.lb-busy{--lbBg:#eef2f7;--lbFg:#40506a;--lbBd:#c8d3e0}
