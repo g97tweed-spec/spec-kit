@@ -29,23 +29,42 @@
      Friday's. The banner reports the pipeline's own clock, not the page's.
    ========================================================================= */
 
+/* Where the feed lives.
+   The team copy is on the PARDivision7 site, in the Fresno WMP 2026 project
+   folder beside the Master Tag Tracker, so anyone with the project folder and
+   their own Microsoft 365 connector reads it. The connector call runs as
+   whoever opened the page, never as whoever published it, so a feed in one
+   person's OneDrive is a feed only that person can see.
+
+   Gavin's own OneDrive copy stays as the fallback, and caldata.json behind
+   that, so the board keeps working through the migration and on any run where
+   the pipeline did not get as far as writing the shared copy.
+
+   The ampersand in the project path is written %26 exactly as the connector
+   accepts it — verified against a real read, not assumed. Spaces are literal. */
+const PAR_DRIVE = "b!Jmmw8kkeLE6Fi1H5TSGYCOnZ6MMo_FNEmUXw3_M2PoI6oBn8fLRUQ7pKdtYNbhi2";
+const PAR_ROOT  = "01 - Programs %26 Projects/Active/16507610870 - Fresno WMP 2026";
+const OWN_DRIVE = "b!PRd2jUqlgUaMUN0sE5o2GNcEPkwp9rFDrMOpOikwnBOuBzwAhU8EQJgZcl3V4FMT";
+const OWN_ROOT  = "Everything Folder/WMP_Fresno_Tracker/data";
+
 const LIVE = {
   server: "Microsoft 365",
   tool: "read_resource",
-  drive: "b!PRd2jUqlgUaMUN0sE5o2GNcEPkwp9rFDrMOpOikwnBOuBzwAhU8EQJgZcl3V4FMT",
-  root: "Everything Folder/WMP_Fresno_Tracker/data",
-  /* Tried in order, first that parses and carries a day map wins.
-     mobile_feed.json is what pipeline/mobile_feed.py writes for this board —
-     the same data as caldata.json with everything the phone does not draw
-     taken out, so it is a fraction of the size over a connector on LTE.
-     caldata.json stays as the fallback for a build made before that step was
-     added to the runbook, or a run where it did not get that far. */
-  feeds: ["mobile_feed.json", "caldata.json", "cal3_payload.json"],
-  stamp: "_last_run.json",
+  /* Tried in order; the first that parses and carries a day map wins. */
+  sources: [
+    {where:"the team folder", drive:PAR_DRIVE, root:PAR_ROOT, file:"mobile_feed.json"},
+    {where:"your OneDrive",   drive:OWN_DRIVE, root:OWN_ROOT, file:"mobile_feed.json"},
+    {where:"your OneDrive",   drive:OWN_DRIVE, root:OWN_ROOT, file:"caldata.json"},
+    {where:"your OneDrive",   drive:OWN_DRIVE, root:OWN_ROOT, file:"cal3_payload.json"}
+  ],
+  /* Optional. The feed carries its own generated/swept/tracker/tab, so the
+     banner no longer depends on this; it is read when reachable and ignored
+     when not. */
+  stamp: {drive:OWN_DRIVE, root:OWN_ROOT, file:"_last_run.json"},
   cacheKey: "fresno-wmp-live-v1",
   state: "boot"      /* boot | live | cached | snapshot */
 };
-function liveUri(name){ return "file:///"+LIVE.drive+"/"+LIVE.root+"/"+name; }
+function liveUri(src){ return "file:///"+src.drive+"/"+src.root+"/"+src.file; }
 
 /* ---------- the freshness line -------------------------------------------
    Replaces the old "Snapshot is N days old" bar. Three honest states, never
@@ -273,8 +292,8 @@ function recolorAFW(){
 }
 
 /* ---------- the read ------------------------------------------------------ */
-function readJSON(mcp,name){
-  return mcp.callTool(LIVE.server,LIVE.tool,{uri:liveUri(name)}).then(function(r){
+function readJSON(mcp,src){
+  return mcp.callTool(LIVE.server,LIVE.tool,{uri:liveUri(src)}).then(function(r){
     let p=r&&r.payload;
     if(typeof p==="string"){ try{ p=JSON.parse(p); }catch(e){ p=null; } }
     return {data:p, at:(r&&r.cache&&r.cache.storedAt)||Date.now()};
@@ -350,15 +369,17 @@ async function goLive(){
   try{ stamp=(await readJSON(mcp,LIVE.stamp)).data; }catch(e){ /* fall through */ }
 
   let feed=null, err=null;
-  for(let i=0;i<LIVE.feeds.length&&!feed;i++){
+  for(let i=0;i<LIVE.sources.length&&!feed;i++){
+    const src=LIVE.sources[i];
     try{
-      const got=await readJSON(mcp,LIVE.feeds[i]);
+      const got=await readJSON(mcp,src);
       if(got.data&&got.data.days&&Object.keys(got.data.days).length){
         /* `v` is only on the trimmed feed; caldata.json has no version stamp.
            Read by shape, not by filename, so a renamed file still lands in the
            right reader. */
         feed=got.data.v?fromTrim(got.data):fromFeed(got.data);
-        feed._file=LIVE.feeds[i];
+        feed._file=src.file;
+        feed._where=src.where;
         feed._at=got.at;
       }
     }catch(e){ err=e; }
@@ -390,7 +411,15 @@ async function goLive(){
   }
 
   /* Live read failed. Say which fallback is on screen and why. */
-  const why=reason(err||{});
+  let why=reason(err||{});
+  /* A colleague opening a shared link hits this: the call works, the file is
+     simply not theirs to read. Name the folder so they know what to ask for
+     rather than being told the board is broken. */
+  if(err&&err.code==="tool_error"){
+    why="Could not read the schedule feed. It lives in the Fresno WMP 2026 "+
+        "project folder on the PARDivision7 site — you need read access to that "+
+        "folder, and Microsoft 365 connected in your own claude.ai account.";
+  }
   if(LIVE.state==="cached"){
     setBar("warn","<b>Offline copy.</b> Saved on this device "+ago(new Date(cached.at).toISOString())+
       ". "+esc(why));

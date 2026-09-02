@@ -61,8 +61,25 @@ it after `merge.py`:
 python3 merge.py
 python3 build.py
 python3 kmz.py
-python3 mobile_feed.py     # writes data/mobile_feed.json
+python3 mobile_feed.py "<synced path>/16507610870 - Fresno WMP 2026"
 ```
+
+The argument is where the **team copy** goes: the Fresno WMP 2026 project folder
+on the PARDivision7 site, beside the Master Tag Tracker, as it appears on the
+Windows box once the site is synced. `MOBILE_FEED_TEAM_DIR` works instead. The
+script writes both copies from one set of bytes, or fails without writing either
+if the path is wrong — a team copy that silently stopped updating is the failure
+worth crashing over.
+
+**Why the team copy exists.** A connector call runs as whoever opened the page,
+never as whoever published it, so a feed in one person's OneDrive is a feed only
+that person can see. Everyone else falls through to the built-in snapshot. With
+the feed on the project folder, anyone with that folder and their own Microsoft
+365 connector reads the live board from the same link.
+
+The boards try, in order: the team copy, then Gavin's OneDrive copy, then
+`caldata.json`. So the migration is safe in both directions — the boards work
+before the team copy exists and keep working on a run that did not get that far.
 
 It projects `caldata.json` down to the fields the board renders — dropping the
 per-organisation "who says what" block, the line-conflict table, the coverage

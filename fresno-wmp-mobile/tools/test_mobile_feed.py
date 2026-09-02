@@ -11,6 +11,7 @@ day is the failure mode worth crashing over.
 """
 
 import json
+import os
 import pathlib
 import shutil
 import subprocess
@@ -79,19 +80,27 @@ def caldata(n_days=3, per_day=4):
     }
 
 
-def run(cal):
-    """Run the real script against a throwaway tree; return (rc, out, feed|None)."""
+def run(cal, args=(), env=None, keep=False):
+    """Run the real script against a throwaway tree; return (rc, out, feed|None).
+    With keep=True the tree is returned too, so the team copy can be inspected."""
     tmp = pathlib.Path(tempfile.mkdtemp())
     (tmp / "data").mkdir()
     (tmp / "pipeline").mkdir()
     (tmp / "data" / "caldata.json").write_text(json.dumps(cal), encoding="utf-8")
     shutil.copy(SCRIPT, tmp / "pipeline" / SCRIPT.name)
-    r = subprocess.run([sys.executable, "pipeline/" + SCRIPT.name],
-                       cwd=tmp, capture_output=True, text=True)
+    e = dict(os.environ)
+    e.pop("MOBILE_FEED_TEAM_DIR", None)
+    if env:
+        e.update(env)
+    r = subprocess.run([sys.executable, "pipeline/" + SCRIPT.name] + list(args),
+                       cwd=tmp, capture_output=True, text=True, env=e)
     out = tmp / "data" / "mobile_feed.json"
     feed = json.loads(out.read_text(encoding="utf-8")) if out.exists() else None
+    res = (r.returncode, (r.stdout + r.stderr).strip(), feed)
+    if keep:
+        return res + (tmp,)
     shutil.rmtree(tmp, ignore_errors=True)
-    return r.returncode, (r.stdout + r.stderr).strip(), feed
+    return res
 
 
 print("\n1. the projection")
@@ -145,6 +154,43 @@ shutil.rmtree(tmp, ignore_errors=True)
 
 rc, out, feed = run({"days": None})
 ok(rc != 0, "a missing day map is refused", out)
+
+print("\n2b. the team copy")
+tmp = pathlib.Path(tempfile.mkdtemp())
+team = tmp / "16507610870 - Fresno WMP 2026"
+team.mkdir(parents=True)
+rc, out, feed, tree = run(caldata(), args=[str(team)], keep=True)
+ok(rc == 0, "runs clean with a team folder", out)
+local = (tree / "data" / "mobile_feed.json")
+shared = team / "mobile_feed.json"
+ok(shared.exists(), "writes the shared copy")
+ok(local.exists(), "and still writes the local one")
+ok(local.read_bytes() == shared.read_bytes(),
+   "byte-identical — one feed in two places, not two feeds")
+ok(str(shared) in out, "names both paths it wrote", out)
+ok("no team copy" not in out, "no nagging when the team copy was written")
+shutil.rmtree(tree, ignore_errors=True)
+
+# the env var is the other way in
+team2 = tmp / "viaenv"
+team2.mkdir()
+rc, out, feed, tree = run(caldata(), env={"MOBILE_FEED_TEAM_DIR": str(team2)}, keep=True)
+ok(rc == 0 and (team2 / "mobile_feed.json").exists(),
+   "MOBILE_FEED_TEAM_DIR works instead of the argument", out)
+shutil.rmtree(tree, ignore_errors=True)
+
+# a path that is not there is an error, and nothing is written anywhere
+rc, out, feed = run(caldata(), args=[str(tmp / "does-not-exist")])
+ok(rc != 0, "a team folder that does not exist is refused", out)
+ok(feed is None, "and the local copy is not written either — the run failed, "
+   "rather than half-succeeding into a silently stale team copy")
+ok("Sync the site" in out, "the error says how to fix it", out[:120])
+shutil.rmtree(tmp, ignore_errors=True)
+
+# with neither, it still works and says what is missing
+rc, out, feed = run(caldata())
+ok(rc == 0 and feed is not None, "no team folder given: still writes the local copy")
+ok("no team copy" in out, "and says the boards stay Gavin-only until it is given", out)
 
 print("\n3. it does not hold the board hostage to size")
 big = caldata(n_days=60, per_day=20)

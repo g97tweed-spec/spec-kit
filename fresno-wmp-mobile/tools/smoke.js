@@ -248,11 +248,11 @@ async function run() {
       open: [{ item: "LZ02 right of way", detail: "BLM approval outstanding", who: "Stantec" }],
       n_tags: 2, n_clr: 2
     };
-    const asked = [];
+    const asked = [], askedUris = [];
     const stub = { use: async n => n !== "mcp" ? null : {
       callTool: async (s, t, i) => {
         const name = i.uri.split("/").pop();
-        asked.push(name);
+        asked.push(name); askedUris.push(i.uri);
         if (name === "_last_run.json") return { payload: { last_build: DAY } };
         if (name === "mobile_feed.json") return { payload: trimmed };
         throw { code: "tool_error", message: "should not have been asked for " + name };
@@ -264,6 +264,11 @@ async function run() {
     ok(asked.indexOf("mobile_feed.json") >= 0, "asks for the trimmed feed", asked.join(","));
     ok(asked.indexOf("caldata.json") < 0,
        "and does not also pull the 1.4 MB payload once the trim answers", asked.join(","));
+    // the shared copy is tried before the personal one, so a colleague with
+    // access to the project folder gets live data rather than the snapshot
+    const first = askedUris.filter(u => u.indexOf("_last_run") < 0)[0] || "";
+    ok(/Fresno WMP 2026/.test(first) && /Programs/.test(first),
+       "reads the team folder on PARDivision7 first", first);
     ok(counts(dom).tags === 2 && counts(dom).afws === 2, "board reads the trimmed shape",
        JSON.stringify(counts(dom)));
     ok(/Up to date/.test(bar(dom)) && /9\.14\.26/.test(bar(dom)),

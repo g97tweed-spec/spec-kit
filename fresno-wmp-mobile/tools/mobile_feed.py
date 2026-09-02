@@ -7,7 +7,18 @@ Runs on the Windows box as the last step of a build, after merge.py:
     python3 merge.py
     python3 build.py
     python3 kmz.py
-    python3 mobile_feed.py     <-- this
+    python3 mobile_feed.py "<synced PARDivision7 path>/16507610870 - Fresno WMP 2026"
+
+The argument is where the TEAM copy goes — the Fresno WMP 2026 project folder on
+the PARDivision7 site, as it appears on this machine once SharePoint is synced.
+Give it once and it writes there as well as to data/. That second copy is the
+one the boards read for anyone other than Gavin: a connector call runs as
+whoever opened the page, so a feed sitting in one person's OneDrive is a feed
+only that person can see.
+
+Set MOBILE_FEED_TEAM_DIR instead of passing it if that suits the runner better.
+With neither, only the local copy is written and the boards keep falling back to
+it, which is what happens today.
 
 caldata.json is ~1.4 MB because it carries everything the desktop discrepancy
 calendar draws: the per-organisation "who says what" block, the line-conflict
@@ -40,8 +51,37 @@ HERE = pathlib.Path(__file__).resolve().parent
 DATA = HERE.parent / "data"
 SRC = DATA / "caldata.json"
 OUT = DATA / "mobile_feed.json"
+OUT_NAME = "mobile_feed.json"
 
 FEED_VERSION = 1
+
+
+def team_dir(argv):
+    """Where the shared copy goes, or None. A path that was given but does not
+    exist is an error, not a shrug: silently skipping it would leave everyone
+    but Gavin reading a feed that stopped updating, with nothing to say so."""
+    raw = (argv[0] if argv else "") or os.environ.get("MOBILE_FEED_TEAM_DIR", "")
+    raw = raw.strip().strip('"')
+    if not raw:
+        return None
+    d = pathlib.Path(raw)
+    if not d.is_dir():
+        die("team folder does not exist: %s\n"
+            "    This should be the Fresno WMP 2026 project folder on the "
+            "PARDivision7 site as it appears on this machine, e.g.\n"
+            "    C:/Users/<you>/Quanta Services/PAR Division 7 - Documents/"
+            "01 - Programs & Projects/Active/16507610870 - Fresno WMP 2026\n"
+            "    Sync the site in OneDrive first, or omit the argument to write "
+            "only the local copy." % d)
+    return d
+
+
+def write_atomic(path, body):
+    """The boards may be reading the old file while this runs, and a
+    half-written feed parses as nothing at all."""
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(body, encoding="utf-8")
+    os.replace(tmp, path)
 
 
 def die(msg):
@@ -94,7 +134,8 @@ def clearance(c):
     return out
 
 
-def main():
+def main(argv):
+    team = team_dir(argv)
     if not SRC.exists():
         die("no caldata.json at %s — run merge.py first" % SRC)
     try:
@@ -160,17 +201,20 @@ def main():
 
     body = json.dumps(feed, ensure_ascii=False, separators=(",", ":"))
 
-    # Atomic: the board may be reading the old file while this runs, and a
-    # half-written feed parses as nothing at all.
-    tmp = OUT.with_suffix(".json.tmp")
-    tmp.write_text(body, encoding="utf-8")
-    os.replace(tmp, OUT)
+    targets = [OUT] + ([team / OUT_NAME] if team else [])
+    for t in targets:
+        write_atomic(t, body)
 
     before = SRC.stat().st_size
     after = OUT.stat().st_size
     print("mobile_feed.json: %d tags on %d days, %d clearances — %.0f KB from %.0f KB (%.0f%%)"
           % (n_tags, len(days), len(clrs), after / 1024, before / 1024, 100 * after / before))
+    for t in targets:
+        print("  wrote %s" % t)
+    if not team:
+        print("  no team copy — pass the PARDivision7 project folder, or set "
+              "MOBILE_FEED_TEAM_DIR, so anyone but Gavin can read the boards")
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])
