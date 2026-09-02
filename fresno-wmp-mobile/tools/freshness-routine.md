@@ -10,14 +10,17 @@ has gone stale while nobody is looking.
 - **Notifications** push on, email off
 - **New session on each firing**
 
-Creating it from a Claude Code session logs a warning that the routine stores no
-MCP connectors and will fire without them. A manual test fire returned
-SUCCEEDED, but a session cannot read another session's transcript, so whether
-the Microsoft 365 tools were actually available has to be read from the run
-itself. If a firing reports it could not reach SharePoint, delete the routine
-and recreate it from the claude.ai Routines UI with the prompt below — the
-existing "Fresno WMP KML — daily 6am refresh" routine is the working example of
-the same pattern.
+**Confirmed working.** Creating this from a Claude Code session logs a warning
+that the routine "stores no MCP connectors" and will fire without them. In this
+environment that warning is wrong: a manual test fire on 2026-09-02 reported the
+Microsoft 365 tools were available to it and completed in 37 seconds. So the
+routine does not need recreating from the claude.ai Routines UI, and neither do
+others like it — the two pre-existing Fresno routines were made the same way and
+have been reading SharePoint and Outlook successfully for weeks.
+
+Worth knowing rather than re-deriving: the way to settle it is to fire the
+routine manually and read the run, because a session cannot read another
+session's transcript. Ask the run itself to state whether the tools loaded.
 
 The prompt as it stands:
 
