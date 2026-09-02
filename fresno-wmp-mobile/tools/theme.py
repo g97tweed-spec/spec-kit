@@ -90,6 +90,43 @@ def _guard(selector, guard):
     return ", ".join(parts)
 
 
+def force_light(css):
+    """Strip the dark palette: the page renders light for everyone.
+
+    Every problem this board had in dark mode — the assigned tag chip, the note
+    chip, the lane hint, the work description — was a colour chosen against a
+    light ground still being used against a dark one. Removing the dark palette
+    removes the class, rather than correcting its members one at a time.
+
+    The page keeps its colour tokens; only the block that redefines them for
+    dark goes. It already paints its own #fff ground, so it holds on a dark
+    host. The viewer's theme toggle also writes an inline `color-scheme` on the
+    root element, which would tint form controls and scrollbars even with every
+    dark rule gone — hence the one !important, which is deliberate: the page is
+    declaring a single theme, not competing over one.
+    """
+    out = []
+    prev = 0
+    removed = 0
+    idx = 0
+    while True:
+        at = css.find(MEDIA, idx)
+        if at < 0:
+            break
+        open_at, close_at = _block_span(css, at)
+        out.append(css[prev:at])
+        prev = close_at + 1
+        idx = close_at + 1
+        removed += 1
+    out.append(css[prev:])
+    body = "".join(out)
+    if removed:
+        body += ("\n/* Single-theme by choice: the dark palette was removed at build time"
+                 "\n   by tools/theme.py force_light. See the README. */"
+                 "\n:root{color-scheme:light !important}\n")
+    return body, removed
+
+
 def apply(css):
     """Return the stylesheet with all three viewer states handled.
 

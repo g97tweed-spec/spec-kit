@@ -57,6 +57,8 @@ REQUIRED = [
 PAGES = [
     {
         "name": "field board",
+        # Dark mode earns its place on a phone opened before dawn.
+        "theme": "auto",
         "extra_css": [],
         "marker": "<title>Fresno WMP 2026 \u2014 Field</title>",
         "needs": ["tagsOn", "defaultDay", "monthIndexFor"],
@@ -89,8 +91,10 @@ PAGES = [
     },
     {
         "name": "desk calendar",
-        # The colour refactor tokenised hex literals; three rgba() ones were
-        # left hardcoded, and an assigned tag was white-on-white in dark mode.
+        # Light only, by request. Read indoors on a monitor, and every contrast
+        # problem this board had lived in its dark palette.
+        "theme": "light",
+        # Only meaningful under "auto" — the dark-mode contrast repairs.
         "extra_css": ["lane-contrast.css"],
         "marker": "<title>Fresno WMP 2026 \u2014 Tag Calendar (desk)</title>",
         "needs": ["monthIndexFor"],
@@ -192,7 +196,9 @@ def main(argv):
     css_anchor = "</style>"
     if css_anchor not in html:
         fail("no </style> to append the live stylesheet to")
-    sheets = [CSS] + [HERE / n for n in page["extra_css"]]
+    sheets = [CSS]
+    if page["theme"] == "auto":
+        sheets += [HERE / n for n in page["extra_css"]]
     add = "\n".join(x.read_text(encoding="utf-8").rstrip() for x in sheets)
     html = html.replace(css_anchor, "\n" + add + "\n" + css_anchor, 1)
 
@@ -201,10 +207,15 @@ def main(argv):
     #    no dark block is left single-theme.
     style_open = html.index("<style>") + len("<style>")
     style_close = html.index("</style>", style_open)
-    css_text, n_rules = theme.apply(html[style_open:style_close])
+    if page["theme"] == "light":
+        css_text, n_gone = theme.force_light(html[style_open:style_close])
+        themed = ("light only — %d dark block(s) removed" % n_gone) if n_gone \
+            else "light only — page had no dark palette"
+    else:
+        css_text, n_rules = theme.apply(html[style_open:style_close])
+        themed = ("%d dark rules given explicit-theme handling" % n_rules) if n_rules \
+            else "single-theme page, left as is"
     html = html[:style_open] + css_text + html[style_close:]
-    themed = ("%d dark rules given explicit-theme handling" % n_rules) if n_rules \
-        else "single-theme page, left as is"
 
     # 4. Offline-first: a field phone opens this with no signal often enough
     #    that the manifest and cache hints matter more than they look.

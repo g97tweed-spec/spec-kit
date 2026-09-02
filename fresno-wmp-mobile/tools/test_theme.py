@@ -86,9 +86,32 @@ out2, n2 = theme.apply(single)
 ok(out2 == single and n2 == 0,
    "left exactly as written — single-theme by design is an answer, not a gap")
 
+print("\n2b. force_light strips the dark palette")
+out_fl, gone = theme.force_light(SAMPLE)
+ok(gone == 1, "the dark block is removed", gone)
+ok("prefers-color-scheme" not in out_fl, "no dark media query survives")
+ok("--bg:#141414" not in out_fl, "and none of its values linger")
+ok("--bg:#fff" in out_fl and ".card{background:var(--bg)}" in out_fl,
+   "the light palette and everything after it are intact")
+ok("color-scheme:light !important" in out_fl,
+   "color-scheme is pinned, so the viewer's dark toggle cannot tint the controls")
+out_none, gone_none = theme.force_light(":root{--bg:#fff}\n")
+ok(gone_none == 0 and "!important" not in out_none,
+   "a page with no dark palette is returned untouched, no stray declaration")
+
 print("\n3. the real boards")
 root = pathlib.Path(__file__).resolve().parent.parent
-for name in ("Gavin_schedule_MOBILE.live.html", "Gavin_schedule_DESK.live.html"):
+# The desk board is light only by request; the field board keeps dark mode,
+# since it is opened on a phone before dawn.
+desk = root / "Gavin_schedule_DESK.live.html"
+if desk.exists():
+    css = desk.read_text(encoding="utf-8")
+    css = css[css.index("<style>"):css.index("</style>")]
+    ok("prefers-color-scheme" not in css, "desk board: no dark palette at all")
+    ok("data-theme" not in css, "desk board: nothing keys off the viewer's theme stamp")
+    ok("color-scheme:light !important" in css, "desk board: pinned to light")
+
+for name in ("Gavin_schedule_MOBILE.live.html",):
     f = root / name
     if not f.exists():
         print("  --   %s not built, skipped" % name)

@@ -131,7 +131,7 @@ patcher handles each:
 |---|---|---|
 | boots | `(async ...)()` with a day strip to reposition | `load().then(...)`, month grid stays put |
 | banner mounts before | `<main>` | `.page` |
-| dark palette | 1 rule, `--ink`/`--bg` | 3 rules, 88 `--kNN` colour tokens |
+| theme | dark mode, three viewer states | **light only** — dark palette stripped at build |
 
 The desk board also keeps a frozen copy of the opening crew lanes for its "clear
 the board" button. A refresh rebuilds it; left alone it would wipe every tag the
@@ -139,30 +139,46 @@ feed brought and resurrect ones it dropped.
 
 ## Themes
 
-Both boards ship their dark colours behind `@media (prefers-color-scheme: dark)`
-and nothing else. That is right for a file opened from Files, where the OS is
-the only thing to ask. Published to claude.ai there is a third state: the viewer
-stamps `data-theme` on the root element for an explicit choice and stamps
-nothing for "system".
+The two boards are set differently, in `PAGES` in `patch.py`:
 
-`tools/theme.py` rewrites the page so all three resolve. It guards the page's
-own dark block **in place** and emits a second copy for the explicit-dark stamp.
-Guarding in place is the part that matters: adding a
-`:root:not([data-theme="light"])` rule alongside does not stop the original
-`:root` rule inside the media query from matching, so someone who picks light on
-a dark-mode OS still gets the dark palette. That was shipped broken on the field
-board before this existed.
+- **field board — `auto`.** Dark mode earns its place on a phone opened before
+  dawn, so it keeps its dark palette and gets all three viewer states.
+- **desk calendar — `light`.** Read indoors on a monitor, and every contrast
+  problem it had lived in its dark palette. `theme.force_light` strips the dark
+  block at build time.
+
+### auto: all three viewer states
+
+A board shipping dark colours behind `@media (prefers-color-scheme: dark)` and
+nothing else covers a viewer on the OS default, which is what these pages were
+built for — opened from Files, there is nothing but the OS to ask. Published to
+claude.ai there is a third state: the viewer stamps `data-theme` on the root
+element for an explicit choice and stamps nothing for "system".
+
+`theme.apply` guards the page's own dark block **in place** and emits a second
+copy for the explicit-dark stamp. Guarding in place is the part that matters:
+adding a `:root:not([data-theme="light"])` rule alongside does not stop the
+original `:root` rule inside the media query from matching, so someone who picks
+light on a dark-mode OS still gets the dark palette. That was shipped broken on
+the field board before this existed.
 
 Every colour is the page's own — nothing here invents a value or decides what
-dark should look like. A page with no dark block is returned untouched;
-single-theme by design is an answer, not a gap. Every dark block is processed,
-not just the first, because the build appends one of its own.
+dark should look like. Every dark block is processed, not just the first,
+because the build can append one of its own.
 
-### Readable tags on a foreman's lane
+### light: one theme, on purpose
 
-`tools/lane-contrast.css` (desk board only) fixes three colours the desk page's
-colour refactor could not reach. It tokenised hex literals; these three are
-`rgba()`, so they stayed hardcoded:
+`theme.force_light` removes the dark blocks entirely and pins
+`color-scheme:light`. The pin matters because the viewer's theme toggle also
+writes an inline `color-scheme` on the root element, which would tint form
+controls and scrollbars even with every dark rule gone. The page keeps its
+colour tokens and already paints its own `#fff` ground, so it holds on a dark
+host.
+
+`tools/lane-contrast.css` repairs three colours for dark mode and is applied
+only under `auto`. It is kept, not deleted, so switching the desk board back to
+`auto` restores the repairs rather than the bugs. What it fixes, measured
+against the desk board's dark palette:
 
 | rule | was | dark-mode contrast |
 |---|---|---|
@@ -170,42 +186,12 @@ colour refactor could not reach. It tokenised hex literals; these three are
 | `.nbox` | `rgba(255,255,255,.92)` | 1.0:1 → 12.8:1 |
 | `.flane .fempty` | `rgba(0,0,0,.4)` | 1.9:1 → 7.8–9.1:1 |
 
-A tag assigned to a foreman moves onto that foreman's colour band and takes a
-pale chip. In light mode that is black text on a pale chip and reads fine. In
-dark mode the chip stayed near-white while the page's text went near-white with
-everything else, so an assigned tag was white on white — 1.1:1, invisible.
-Unassigned tags were unaffected, which is why it only appeared once work had
-been given to someone.
-
-The fix is dark-mode only; light mode is byte-for-byte as drawn. On the band the
-chip darkens rather than lightens, because the dark lane colours are mid-tone
-and carry the page's light text far better that way.
-
-The lane's "nothing here" hint could not be fixed by recolouring: white text
-straight on the teal band tops out at 4.25:1, under AA for small text. It gets
-the same dark backing as the chips beside it and reads against that instead of
-against the band, taking their padding so it lines up with them, and keeping no
-border and a dimmed white so it still reads as an absence rather than as another
-tag.
-
-`patch.py` takes `Gavin_schedule_MOBILE.snapshot.html` as input and never edits
-it. Every edit is anchored on text that must exist; a missing anchor is a hard
-failure, because quietly producing a page that looks live but is not is the one
-outcome worth crashing over. Re-run it after the board is regenerated.
-
-Two outputs, because they are opened two different ways:
-
-- **`.artifact.html`** — document shell removed, for publishing to claude.ai.
-  This is the one that refreshes: only a published artifact can reach the
-  connector.
-- **`.live.html`** — standalone, for OneDrive. Opened straight from Files it has
-  no connector, so it shows the snapshot and says so. It is the offline backup,
-  not the live copy.
-
-`smoke.js` takes either built page and drives it under jsdom with a stubbed
-connector, asserting the same six states on both, plus the things a refresh must
-never do: drop a crew lane, give two overlapping clearance windows the same
-colour, or leave the desk board's reset baseline on snapshot values.
+The desk page's colour refactor tokenised hex literals; these three are
+`rgba()`, so they stayed hardcoded. A tag assigned to a foreman moves onto that
+foreman's colour band and takes a pale chip — black on pale in light mode, and
+in dark mode white on white at 1.1:1. One more, `.tag i` (the work code beside
+the structure number), sat at 3.1–3.6:1 on a lane and was never repaired, since
+the board went light-only first.
 
 ## Known limits
 
