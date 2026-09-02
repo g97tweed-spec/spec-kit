@@ -1,7 +1,9 @@
-/* ---------- live-data banner ----------
-   Sits above <main>, replacing the old stale-snapshot bar. Four states, each
+/* ---------- live-data banner (both boards) ----------
+   Sits above the board, replacing the old stale-snapshot bar. Four states, each
    with its own weight: green reads as "go", amber as "check the date on this",
-   red as "you are looking at old work". */
+   red as "you are looking at old work". Light values here; the field board
+   redefines them for dark in theme-mobile.css. The desk calendar is a
+   deliberately light, print-style page and keeps these as they are. */
 #liveBar{padding:9px 14px;font-size:12.5px;line-height:1.4;text-align:left;
   background:var(--lbBg);color:var(--lbFg);border-bottom:1px solid var(--lbBd)}
 #liveBar b{font-weight:650}
@@ -9,29 +11,3 @@
 #liveBar.lb-warn{--lbBg:#fdf0d8;--lbFg:#5a3a10;--lbBd:#e0c088}
 #liveBar.lb-bad {--lbBg:#fbe9e9;--lbFg:#6b1f1f;--lbBd:#e3b3b3}
 #liveBar.lb-busy{--lbBg:#eef2f7;--lbFg:#40506a;--lbBd:#c8d3e0}
-
-/* ---------- theme resolution ----------
-   The board shipped with a prefers-color-scheme block only. In a viewer that
-   stamps an explicit choice on the root element, that block alone renders one
-   theme's text on the other theme's ground, so the dark tokens are declared
-   twice more: once guarded so an explicit light choice beats a dark OS, and
-   once for an explicit dark choice. Tokens only — no component styles live in
-   here. */
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --ink:#f2f2f2; --ink2:#d6d6d6; --mute:#9a9a9a; --line:#3a3a3a; --line2:#2a2a2a;
-    --bg:#141414; --panel:#1e1e1e;
-  }
-  :root:not([data-theme="light"]) #liveBar.lb-live{--lbBg:#14301e;--lbFg:#a8e0bd;--lbBd:#235c39}
-  :root:not([data-theme="light"]) #liveBar.lb-warn{--lbBg:#33280f;--lbFg:#f0d49a;--lbBd:#5c4718}
-  :root:not([data-theme="light"]) #liveBar.lb-bad {--lbBg:#331717;--lbFg:#f0b5b5;--lbBd:#5c2626}
-  :root:not([data-theme="light"]) #liveBar.lb-busy{--lbBg:#1b222c;--lbFg:#b8c6d8;--lbBd:#2f3b4a}
-}
-:root[data-theme="dark"]{
-  --ink:#f2f2f2; --ink2:#d6d6d6; --mute:#9a9a9a; --line:#3a3a3a; --line2:#2a2a2a;
-  --bg:#141414; --panel:#1e1e1e;
-}
-:root[data-theme="dark"] #liveBar.lb-live{--lbBg:#14301e;--lbFg:#a8e0bd;--lbBd:#235c39}
-:root[data-theme="dark"] #liveBar.lb-warn{--lbBg:#33280f;--lbFg:#f0d49a;--lbBd:#5c4718}
-:root[data-theme="dark"] #liveBar.lb-bad {--lbBg:#331717;--lbFg:#f0b5b5;--lbBd:#5c2626}
-:root[data-theme="dark"] #liveBar.lb-busy{--lbBg:#1b222c;--lbFg:#b8c6d8;--lbBd:#2f3b4a}

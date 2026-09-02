@@ -55,7 +55,10 @@ function liveBar(){
   if(!el){
     el=document.createElement("div");
     el.id="liveBar";
-    const host=document.querySelector("main");
+    /* The field board wraps its content in <main>; the desk calendar uses
+       .page. Same fallback order the boards' own stale banner used, so the
+       bar lands in the same place on both. */
+    const host=document.querySelector("main")||document.querySelector(".page");
     if(host&&host.parentNode)host.parentNode.insertBefore(el,host);
     else return null;
   }
@@ -233,6 +236,18 @@ function applyFeed(F){
      are reading it at all. */
   NOTREADY.clear();
   TAGS.forEach(function(t){ if(t.notready)NOTREADY.add(t.id); });
+
+  /* The desk calendar keeps a frozen copy of the opening lanes for its "clear
+     the board" button. Left alone it would restore lanes for tags the feed has
+     dropped and clear every tag the feed brought, so it is refreshed to match
+     what is now on the board. It is a const binding, so the contents are
+     replaced rather than the binding. The field board has no such copy. */
+  if(typeof baseline!=="undefined"&&baseline&&typeof baseline==="object"){
+    Object.keys(baseline).forEach(function(k){ delete baseline[k]; });
+    Object.keys(state.place).forEach(function(k){
+      baseline[k]={d:state.place[k].d,lane:PRESET[k]||"unassigned"};
+    });
+  }
 
   recolorAFW();
   return true;

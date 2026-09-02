@@ -1,12 +1,18 @@
-# Fresno WMP 2026 field board — live refresh
+# Fresno WMP 2026 boards — live refresh
 
-Turns the hardcoded mobile board into one that shows current data when it is
-opened, instead of the snapshot it was built from.
+Turns the hardcoded field and desk boards into ones that show current data when
+they are opened, instead of the snapshot they were built from. Both read the
+same feed and share one live layer.
 
-The board itself is not in this repository. It carries live PG&E operational
+The boards themselves are not in this repository. It carries live PG&E operational
 data — notification numbers, structure IDs, clearance windows, and named
 contacts with phone numbers — and this repository is public. Only the build
 tooling is here; `.gitignore` keeps the pages out.
+
+| board | page | opens |
+|---|---|---|
+| field | `Gavin_schedule_MOBILE.html` | phone, day at a time |
+| desk | `Gavin_schedule_DESK.html` | browser, month grid |
 
 ## What actually refreshes, and what does not
 
@@ -107,10 +113,28 @@ arrived with the feed and were never in the snapshot.
 ## Build
 
 ```bash
-python3 tools/patch.py            # snapshot -> .live.html (standalone) + .artifact.html (fragment)
-node tools/smoke.js               # 34 checks across the six states
-python3 tools/test_mobile_feed.py # 23 checks on the trimmer and its guards
+python3 tools/patch.py Gavin_schedule_MOBILE.snapshot.html
+python3 tools/patch.py Gavin_schedule_DESK.snapshot.html
+node tools/smoke.js Gavin_schedule_MOBILE.live.html   # 34 checks, six states
+node tools/smoke.js Gavin_schedule_DESK.live.html     # 36 — adds the reset baseline
+python3 tools/test_mobile_feed.py                     # 23 on the trimmer and its guards
 ```
+
+`patch.py` identifies which board it was handed from the page's own title and
+boot block, and refuses anything else. Before splicing it checks the page
+declares every symbol the live layer drives it through; a page missing any is
+named, not patched and hoped for. The two boards differ in three places and the
+patcher handles each:
+
+| | field board | desk calendar |
+|---|---|---|
+| boots | `(async ...)()` with a day strip to reposition | `load().then(...)`, month grid stays put |
+| banner mounts before | `<main>` | `.page` |
+| theme | dark palette, three viewer states | light only, by choice — it paints `#fff` and reads against it throughout |
+
+The desk board also keeps a frozen copy of the opening crew lanes for its "clear
+the board" button. A refresh rebuilds it; left alone it would wipe every tag the
+feed brought and resurrect ones it dropped.
 
 `patch.py` takes `Gavin_schedule_MOBILE.snapshot.html` as input and never edits
 it. Every edit is anchored on text that must exist; a missing anchor is a hard
@@ -126,9 +150,10 @@ Two outputs, because they are opened two different ways:
   no connector, so it shows the snapshot and says so. It is the offline backup,
   not the live copy.
 
-`smoke.js` drives the built page under jsdom with a stubbed connector and
-asserts the four states, plus the two things a refresh must never do: drop a
-crew lane, or give two overlapping clearance windows the same colour.
+`smoke.js` takes either built page and drives it under jsdom with a stubbed
+connector, asserting the same six states on both, plus the things a refresh must
+never do: drop a crew lane, give two overlapping clearance windows the same
+colour, or leave the desk board's reset baseline on snapshot values.
 
 ## Known limits
 

@@ -15,8 +15,14 @@ const path = require("path");
 const { JSDOM, VirtualConsole } = require(process.env.JSDOM ||
   "/tmp/claude-0/-home-user-spec-kit/3b825c4a-09ec-5d15-97cc-c9efe5430fe7/scratchpad/node_modules/jsdom");
 
-const FILE = path.join(__dirname, "..", "Gavin_schedule_MOBILE.live.html");
+/* Runs against either board: node tools/smoke.js [built-page.html]
+   The live layer is identical on both, so the same six states are asserted on
+   whichever page is handed in. */
+const FILE = process.argv[2]
+  ? path.resolve(process.argv[2])
+  : path.join(__dirname, "..", "Gavin_schedule_MOBILE.live.html");
 const HTML = fs.readFileSync(FILE, "utf8");
+console.log("smoke: " + path.basename(FILE));
 
 let pass = 0, fail = 0;
 function ok(cond, label, extra) {
@@ -144,6 +150,16 @@ async function run() {
     // the tag the feed flags must reach the rendered day
     const body = dom.window.document.body.textContent;
     ok(/021\/401/.test(body), "feed tag rendered on the board");
+
+    // Desk calendar only: its "clear the board" button restores a frozen copy
+    // of the opening lanes. Left on snapshot values it would wipe every tag the
+    // feed brought and resurrect ones it dropped.
+    if (ev(dom, 'typeof baseline') === "object") {
+      const bKeys = ev(dom, "Object.keys(baseline).sort().join(',')");
+      const pKeys = ev(dom, "Object.keys(state.place).sort().join(',')");
+      ok(bKeys === pKeys, "reset baseline is rebuilt to match the feed", bKeys);
+      ok(bKeys === "131176541,133636998", "and holds the feed's tags, not the snapshot's", bKeys);
+    }
   }
 
   /* ---- 2. no connector -------------------------------------------------- */

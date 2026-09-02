@@ -40,24 +40,31 @@ REQUIRED = [
     ("render", "the repaint entry point"),
     ("esc", "the HTML escaper"),
     ("daysBetween", "the date arithmetic the banner reports with"),
-    ("tagsOn", "the per-day tag lookup"),
-    ("defaultDay", "the opening day chooser"),
-    ("monthIndexFor", "the opening month chooser"),
 ]
 
-# The boot block, replaced wholesale. The original awaited load() and rendered
-# the snapshot; the live one renders the snapshot first and then upgrades it,
-# so the page is usable on a phone before SharePoint has answered.
-BOOT_OLD = """/* ===================== GO ===================== */
+# Each board opens differently, so each gets its own boot block. The shape is
+# the same on both: render the hardcoded snapshot first so the page is usable
+# immediately, then upgrade it in place once the connector answers. A board
+# that sits blank waiting on SharePoint is worse than one showing yesterday.
+#
+# `extra_css` is what that board needs beyond the shared banner. The field
+# board takes the theme blocks; the desk calendar is a print-style page that
+# commits to light and would be broken by them.
+PAGES = [
+    {
+        "name": "field board",
+        "marker": "<title>Fresno WMP 2026 \u2014 Field</title>",
+        "extra_css": ["theme-mobile.css"],
+        "needs": ["tagsOn", "defaultDay", "monthIndexFor"],
+        "boot_old": """/* ===================== GO ===================== */
 (async function(){
   await load();
   cur=monthIndexFor(TODAY);
   selDay=defaultDay();
   staleBanner();
   render();
-})();"""
-
-BOOT_NEW = """/* ===================== GO ===================== */
+})();""",
+        "boot_new": """/* ===================== GO ===================== */
 (async function(){
   await load();
   cur=monthIndexFor(TODAY);
@@ -74,7 +81,39 @@ BOOT_NEW = """/* ===================== GO ===================== */
   }catch(e){
     snapshotBar("Refresh failed to start: "+(e&&e.message||e));
   }
-})();"""
+})();""",
+    },
+    {
+        "name": "desk calendar",
+        "marker": "<title>Fresno WMP 2026 \u2014 Tag Calendar (desk)</title>",
+        "extra_css": [],
+        "needs": ["monthIndexFor"],
+        "boot_old": "load().then(()=>{render();staleBanner();});",
+        "boot_new": """load().then(async()=>{
+  render();
+  try{
+    await goLive();
+    /* The desk board shows a whole month at a time, so a feed that moves a tag
+       between days changes what is in the grid but not which grid to show. It
+       is repainted, not repositioned — goLive() has already done that. */
+  }catch(e){
+    snapshotBar("Refresh failed to start: "+(e&&e.message||e));
+  }
+});""",
+    },
+]
+
+
+def identify(html):
+    """Which board is this? Matched on the page's own title, and on its boot
+    block actually being present — a page that merely looks like one of these
+    but opens some other way is not one we can splice into."""
+    for page in PAGES:
+        if page["marker"] in html and page["boot_old"] in html:
+            return page
+    known = ", ".join(p["name"] for p in PAGES)
+    fail("this is not a page patch.py knows how to wire up (expected one of: %s). "
+         "Either the title or the boot block has changed." % known)
 
 
 def fragment(html):
@@ -95,11 +134,11 @@ def fail(msg):
     sys.exit("patch.py: " + msg)
 
 
-def preflight(html):
+def preflight(html, extra=()):
     """Every symbol live.js reaches for must already exist in the page, and be
     declared before the boot block where the live layer is spliced in."""
     missing = []
-    for name, why in REQUIRED:
+    for name, why in REQUIRED + [(n, "needed by this board's boot block") for n in extra]:
         # a declaration, not a mention: `const TAGS=`, `let state=`,
         # `function render(`, `var x =` — whitespace tolerated
         decl = re.search(r"\b(?:const|let|var)\s+%s\b\s*=" % re.escape(name), html) \
@@ -128,14 +167,12 @@ def main(argv):
 
     html = src.read_text(encoding="utf-8")
     live = LIVE.read_text(encoding="utf-8")
-    preflight(html)
+    page = identify(html)
+    preflight(html, page["needs"])
 
     # 1. The live module goes in just before the boot block, so every helper it
     #    leans on (TAGS, AFWS, state, render, esc, PAL, AFWCOL) is defined.
-    if BOOT_OLD not in html:
-        fail("boot block not found — this page does not open the way the mobile "
-             "board does, so the live layer has nowhere to hook in")
-    html = html.replace(BOOT_OLD, live.rstrip() + "\n\n" + BOOT_NEW, 1)
+    html = html.replace(page["boot_old"], live.rstrip() + "\n\n" + page["boot_new"], 1)
 
     # 2. staleBanner is dead: the live layer owns the banner now. Left defined
     #    but unwired, so an older call site cannot resurrect the wrong message.
@@ -149,25 +186,23 @@ def main(argv):
     css_anchor = "</style>"
     if css_anchor not in html:
         fail("no </style> to append the live stylesheet to")
-    html = html.replace(css_anchor, "\n" + CSS.read_text(encoding="utf-8").rstrip()
-                        + "\n" + css_anchor, 1)
+    sheets = [CSS] + [HERE / n for n in page["extra_css"]]
+    add = "\n".join(s.read_text(encoding="utf-8").rstrip() for s in sheets)
+    html = html.replace(css_anchor, "\n" + add + "\n" + css_anchor, 1)
 
     # 4. Offline-first: a field phone opens this with no signal often enough
     #    that the manifest and cache hints matter more than they look.
+    # Only the field board carries this meta; the desk page has no mobile head.
     head_old = '<meta name="theme-color" content="#111111">'
-    if head_old not in html:
-        fail("head anchor not found")
-    html = html.replace(
-        head_old,
-        head_old + '\n<meta name="referrer" content="no-referrer">',
-        1,
-    )
+    if head_old in html:
+        html = html.replace(
+            head_old, head_old + '\n<meta name="referrer" content="no-referrer">', 1)
 
     out.write_text(html, encoding="utf-8")
     frag.write_text(fragment(html), encoding="utf-8")
     base = len(src.read_text(encoding="utf-8"))
-    print("%s -> %s (%d bytes, +%d) and %s"
-          % (src.name, out.name, len(html), len(html) - base, frag.name))
+    print("%s [%s] -> %s (%d bytes, +%d) and %s"
+          % (src.name, page["name"], out.name, len(html), len(html) - base, frag.name))
 
 
 if __name__ == "__main__":
