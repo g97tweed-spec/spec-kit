@@ -15,7 +15,10 @@ import pathlib
 import re
 import sys
 
+import theme
+
 HERE = pathlib.Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
 ROOT = HERE.parent
 LIVE = HERE / "live.js"
 CSS = HERE / "live.css"
@@ -47,14 +50,14 @@ REQUIRED = [
 # immediately, then upgrade it in place once the connector answers. A board
 # that sits blank waiting on SharePoint is worse than one showing yesterday.
 #
-# `extra_css` is what that board needs beyond the shared banner. The field
-# board takes the theme blocks; the desk calendar is a print-style page that
-# commits to light and would be broken by them.
+# Theme handling is not listed per board: it is derived from whatever dark
+# palette each page already declares (see tools/theme.py), so a board that has
+# one gets all three viewer states and a board that does not is left as the
+# single-theme design it is.
 PAGES = [
     {
         "name": "field board",
         "marker": "<title>Fresno WMP 2026 \u2014 Field</title>",
-        "extra_css": ["theme-mobile.css"],
         "needs": ["tagsOn", "defaultDay", "monthIndexFor"],
         "boot_old": """/* ===================== GO ===================== */
 (async function(){
@@ -86,7 +89,6 @@ PAGES = [
     {
         "name": "desk calendar",
         "marker": "<title>Fresno WMP 2026 \u2014 Tag Calendar (desk)</title>",
-        "extra_css": [],
         "needs": ["monthIndexFor"],
         "boot_old": "load().then(()=>{render();staleBanner();});",
         "boot_new": """load().then(async()=>{
@@ -186,9 +188,18 @@ def main(argv):
     css_anchor = "</style>"
     if css_anchor not in html:
         fail("no </style> to append the live stylesheet to")
-    sheets = [CSS] + [HERE / n for n in page["extra_css"]]
-    add = "\n".join(s.read_text(encoding="utf-8").rstrip() for s in sheets)
-    html = html.replace(css_anchor, "\n" + add + "\n" + css_anchor, 1)
+    html = html.replace(css_anchor, "\n" + CSS.read_text(encoding="utf-8").rstrip()
+                        + "\n" + css_anchor, 1)
+
+    # 4. Make the page's own dark palette answer all three viewer states, not
+    #    just the OS default. Derived from what the page declares; a page with
+    #    no dark block is left single-theme.
+    style_open = html.index("<style>") + len("<style>")
+    style_close = html.index("</style>", style_open)
+    css_text, n_rules = theme.apply(html[style_open:style_close])
+    html = html[:style_open] + css_text + html[style_close:]
+    themed = ("%d dark rules given explicit-theme handling" % n_rules) if n_rules \
+        else "single-theme page, left as is"
 
     # 4. Offline-first: a field phone opens this with no signal often enough
     #    that the manifest and cache hints matter more than they look.
@@ -201,8 +212,8 @@ def main(argv):
     out.write_text(html, encoding="utf-8")
     frag.write_text(fragment(html), encoding="utf-8")
     base = len(src.read_text(encoding="utf-8"))
-    print("%s [%s] -> %s (%d bytes, +%d) and %s"
-          % (src.name, page["name"], out.name, len(html), len(html) - base, frag.name))
+    print("%s [%s] -> %s (%d bytes, +%d) and %s\n   %s"
+          % (src.name, page["name"], out.name, len(html), len(html) - base, frag.name, themed))
 
 
 if __name__ == "__main__":

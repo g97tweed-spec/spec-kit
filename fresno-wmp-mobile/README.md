@@ -118,6 +118,7 @@ python3 tools/patch.py Gavin_schedule_DESK.snapshot.html
 node tools/smoke.js Gavin_schedule_MOBILE.live.html   # 34 checks, six states
 node tools/smoke.js Gavin_schedule_DESK.live.html     # 36 — adds the reset baseline
 python3 tools/test_mobile_feed.py                     # 23 on the trimmer and its guards
+python3 tools/test_theme.py                           # 18 on the theme rewrite
 ```
 
 `patch.py` identifies which board it was handed from the page's own title and
@@ -130,11 +131,31 @@ patcher handles each:
 |---|---|---|
 | boots | `(async ...)()` with a day strip to reposition | `load().then(...)`, month grid stays put |
 | banner mounts before | `<main>` | `.page` |
-| theme | dark palette, three viewer states | light only, by choice — it paints `#fff` and reads against it throughout |
+| dark palette | 1 rule, `--ink`/`--bg` | 3 rules, 88 `--kNN` colour tokens |
 
 The desk board also keeps a frozen copy of the opening crew lanes for its "clear
 the board" button. A refresh rebuilds it; left alone it would wipe every tag the
 feed brought and resurrect ones it dropped.
+
+## Themes
+
+Both boards ship their dark colours behind `@media (prefers-color-scheme: dark)`
+and nothing else. That is right for a file opened from Files, where the OS is
+the only thing to ask. Published to claude.ai there is a third state: the viewer
+stamps `data-theme` on the root element for an explicit choice and stamps
+nothing for "system".
+
+`tools/theme.py` rewrites the page so all three resolve. It guards the page's
+own dark block **in place** and emits a second copy for the explicit-dark stamp.
+Guarding in place is the part that matters: adding a
+`:root:not([data-theme="light"])` rule alongside does not stop the original
+`:root` rule inside the media query from matching, so someone who picks light on
+a dark-mode OS still gets the dark palette. That was shipped broken on the field
+board before this existed.
+
+Every colour is the page's own — nothing here invents a value or decides what
+dark should look like. A page with no dark block is returned untouched; single
+-theme by design is an answer, not a gap.
 
 `patch.py` takes `Gavin_schedule_MOBILE.snapshot.html` as input and never edits
 it. Every edit is anchored on text that must exist; a missing anchor is a hard
