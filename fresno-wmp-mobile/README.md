@@ -154,8 +154,32 @@ a dark-mode OS still gets the dark palette. That was shipped broken on the field
 board before this existed.
 
 Every colour is the page's own — nothing here invents a value or decides what
-dark should look like. A page with no dark block is returned untouched; single
--theme by design is an answer, not a gap.
+dark should look like. A page with no dark block is returned untouched;
+single-theme by design is an answer, not a gap. Every dark block is processed,
+not just the first, because the build appends one of its own.
+
+### Readable tags on a foreman's lane
+
+`tools/lane-contrast.css` (desk board only) fixes three colours the desk page's
+colour refactor could not reach. It tokenised hex literals; these three are
+`rgba()`, so they stayed hardcoded:
+
+| rule | was | dark-mode contrast |
+|---|---|---|
+| `.flane .tag` | `rgba(255,255,255,.82)` | 1.1:1 → 8.7–10.3:1 |
+| `.nbox` | `rgba(255,255,255,.92)` | 1.0:1 → 12.8:1 |
+| `.flane .fempty` | `rgba(0,0,0,.4)` | 1.9:1 → 4.3–5.8:1 |
+
+A tag assigned to a foreman moves onto that foreman's colour band and takes a
+pale chip. In light mode that is black text on a pale chip and reads fine. In
+dark mode the chip stayed near-white while the page's text went near-white with
+everything else, so an assigned tag was white on white — 1.1:1, invisible.
+Unassigned tags were unaffected, which is why it only appeared once work had
+been given to someone.
+
+The fix is dark-mode only; light mode is byte-for-byte as drawn. On the band the
+chip darkens rather than lightens, because the dark lane colours are mid-tone
+and carry the page's light text far better that way.
 
 `patch.py` takes `Gavin_schedule_MOBILE.snapshot.html` as input and never edits
 it. Every edit is anchored on text that must exist; a missing anchor is a hard

@@ -57,6 +57,7 @@ REQUIRED = [
 PAGES = [
     {
         "name": "field board",
+        "extra_css": [],
         "marker": "<title>Fresno WMP 2026 \u2014 Field</title>",
         "needs": ["tagsOn", "defaultDay", "monthIndexFor"],
         "boot_old": """/* ===================== GO ===================== */
@@ -88,6 +89,9 @@ PAGES = [
     },
     {
         "name": "desk calendar",
+        # The colour refactor tokenised hex literals; three rgba() ones were
+        # left hardcoded, and an assigned tag was white-on-white in dark mode.
+        "extra_css": ["lane-contrast.css"],
         "marker": "<title>Fresno WMP 2026 \u2014 Tag Calendar (desk)</title>",
         "needs": ["monthIndexFor"],
         "boot_old": "load().then(()=>{render();staleBanner();});",
@@ -188,8 +192,9 @@ def main(argv):
     css_anchor = "</style>"
     if css_anchor not in html:
         fail("no </style> to append the live stylesheet to")
-    html = html.replace(css_anchor, "\n" + CSS.read_text(encoding="utf-8").rstrip()
-                        + "\n" + css_anchor, 1)
+    sheets = [CSS] + [HERE / n for n in page["extra_css"]]
+    add = "\n".join(x.read_text(encoding="utf-8").rstrip() for x in sheets)
+    html = html.replace(css_anchor, "\n" + add + "\n" + css_anchor, 1)
 
     # 4. Make the page's own dark palette answer all three viewer states, not
     #    just the OS default. Derived from what the page declares; a page with

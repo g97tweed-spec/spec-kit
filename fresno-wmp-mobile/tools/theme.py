@@ -93,42 +93,65 @@ def _guard(selector, guard):
 def apply(css):
     """Return the stylesheet with all three viewer states handled.
 
-    Returns it unchanged when the page declares no dark palette — that is a
-    single-theme design, and giving it a dark ground it never reads would leave
-    half the page light and half dark.
+    Every `prefers-color-scheme: dark` block is processed, not just the first —
+    the build appends its own (see lane-contrast.css), and a block left
+    unguarded is exactly the bug this module exists to prevent.
+
+    Returns the stylesheet unchanged when the page declares no dark palette at
+    all — that is a single-theme design, and giving it a dark ground it never
+    reads would leave half the page light and half dark.
     """
-    at = css.find(MEDIA)
-    if at < 0:
+    spans = []
+    idx = 0
+    while True:
+        at = css.find(MEDIA, idx)
+        if at < 0:
+            break
+        open_at, close_at = _block_span(css, at)
+        spans.append((open_at, close_at))
+        idx = close_at + 1
+    if not spans:
         return css, 0
 
-    open_at, close_at = _block_span(css, at)
-    body = css[open_at + 1:close_at]
-    rules = _rules(body)
-    if not rules:
-        return css, 0
+    out = []
+    prev = 0
+    total = 0
+    first = True
+    for open_at, close_at in spans:
+        body = css[open_at + 1:close_at]
+        rules = _rules(body)
+        if not rules:
+            continue
+        total += len(rules)
 
-    # 1. Guard the page's own block in place, back to front so the earlier
-    #    spans stay valid.
-    guarded = body
-    for (s0, s1), sel, _ in reversed(rules):
-        guarded = guarded[:s0] + _guard(sel, GUARD_SYSTEM) + guarded[s1:]
+        # 1. Guard the page's own block in place, back to front so the earlier
+        #    spans stay valid.
+        guarded = body
+        for (s0, s1), sel, _ in reversed(rules):
+            guarded = guarded[:s0] + _guard(sel, GUARD_SYSTEM) + guarded[s1:]
 
-    # 2. Emit the same declarations again for an explicit dark choice.
-    copy = ["/* Same palette again for a viewer who picked dark explicitly."
-            "\n   Generated from the block above by tools/theme.py — edit that"
-            "\n   block, not this one. */"]
-    for _, sel, decls in rules:
-        copy.append("%s{%s}" % (_guard(sel, GUARD_DARK), decls.strip()))
+        # 2. Emit the same declarations again for an explicit dark choice.
+        copy = ["/* Same palette again for a viewer who picked dark explicitly."
+                "\n   Generated from the block above by tools/theme.py — edit that"
+                "\n   block, not this one. */"]
+        for _, sel, decls in rules:
+            copy.append("%s{%s}" % (_guard(sel, GUARD_DARK), decls.strip()))
 
-    # 3. The banner, in both states.
-    banner_sys = "\n".join("%s{%s}" % (_guard(s, GUARD_SYSTEM), d) for s, d in BANNER_DARK)
-    banner_dark = "\n".join("%s{%s}" % (_guard(s, GUARD_DARK), d) for s, d in BANNER_DARK)
+        # 3. The banner, once, alongside the first block that carries anything.
+        banner_sys = banner_dark = ""
+        if first:
+            banner_sys = "\n" + "\n".join(
+                "%s{%s}" % (_guard(s, GUARD_SYSTEM), d) for s, d in BANNER_DARK)
+            banner_dark = "\n" + "\n".join(
+                "%s{%s}" % (_guard(s, GUARD_DARK), d) for s, d in BANNER_DARK)
+            first = False
 
-    out = (css[:open_at + 1]
-           + guarded
-           + "\n" + banner_sys + "\n"
-           + css[close_at:close_at + 1]
-           + "\n\n" + "\n".join(copy)
-           + "\n" + banner_dark + "\n"
-           + css[close_at + 1:])
-    return out, len(rules)
+        out.append(css[prev:open_at + 1])
+        out.append(guarded)
+        out.append(banner_sys + "\n")
+        out.append(css[close_at:close_at + 1])
+        out.append("\n\n" + "\n".join(copy) + banner_dark + "\n")
+        prev = close_at + 1
+
+    out.append(css[prev:])
+    return "".join(out), total

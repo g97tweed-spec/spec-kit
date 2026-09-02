@@ -65,6 +65,21 @@ ok("#liveBar.lb-live" in out, "the banner gets dark skins in both states")
 ok(out.count("--lbBg:#14301e") == 2, "banner skin once per state",
    out.count("--lbBg:#14301e"))
 
+print("\n1b. a page with more than one dark block")
+TWO = SAMPLE + """
+@media (prefers-color-scheme: dark){
+  .flane .tag{background:rgba(0,0,0,.45)}
+}
+"""
+out2b, n2b = theme.apply(TWO)
+ok(n2b == 3, "rules across both blocks are counted", n2b)
+ok(out2b.count(':root:not([data-theme="light"]) .flane .tag') == 1,
+   "the appended block is guarded too — an unguarded second block is the same bug")
+ok(':root[data-theme="dark"] .flane .tag' in out2b,
+   "and answers an explicit dark choice")
+ok(out2b.count("--lbBg:#14301e") == 2,
+   "banner skins are emitted once, not once per block", out2b.count("--lbBg:#14301e"))
+
 print("\n2. a page with no dark palette")
 single = ":root{ --bg:#fff }\nbody{background:var(--bg)}\n"
 out2, n2 = theme.apply(single)

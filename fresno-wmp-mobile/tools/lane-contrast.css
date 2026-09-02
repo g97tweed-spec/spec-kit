@@ -1,0 +1,37 @@
+/* ---------- desk calendar: readable tags on a foreman's lane ----------
+
+   When a tag is assigned to a foreman it moves into that foreman's lane, and
+   the lane paints itself in the foreman's colour. The tag chip sitting on that
+   band was given a fixed near-white background:
+
+       .flane .tag{background:rgba(255,255,255,.82)}
+
+   which is right in light mode — a pale chip lifting off a saturated band, with
+   black text on it. In dark mode the chip stayed near-white while the page's
+   text colour went to #f0f0f0 with everything else, so an assigned tag was
+   white text on a white chip. Unassigned tags were unaffected, which is why
+   this only showed up once a foreman had been given the work.
+
+   The colour refactor could not catch these: it tokenised hex literals, and
+   these three are rgba(), so they were left behind as the only hardcoded
+   colours still in the stylesheet.
+
+   The fix is dark-mode only. Light mode is untouched and still looks exactly as
+   drawn. On the band the chip darkens rather than lightens — the dark lane
+   colours (--alex #a34c3a, --thomas #1f8792, --jose #8d7600) are mid-tone, so
+   a darker chip carries the page's light text at far better contrast than a
+   lighter one would. */
+@media (prefers-color-scheme: dark){
+  /* the assigned tag itself: dark chip, page's own light text */
+  .flane .tag{background:rgba(0,0,0,.45)}
+  /* "nothing assigned yet" sat as near-black text on the dark band (1.9:1).
+     Full white is the best available without restyling the placeholder: it
+     reaches 5.75:1 on Alex, 4.45 on Jose, 4.25 on Thomas — the teal band is
+     the light one, so that last is a shade under AA's 4.5 for small text.
+     Clearing it outright would mean giving the hint its own backing rather
+     than recolouring it, which changes the layout, not just the colour. */
+  .flane .fempty{color:#fff}
+  /* same defect, same cause, two lines away: the note chip in a day cell was a
+     near-white box carrying the page's light text */
+  .nbox{background:rgba(255,255,255,.08)}
+}
