@@ -168,7 +168,7 @@ colour refactor could not reach. It tokenised hex literals; these three are
 |---|---|---|
 | `.flane .tag` | `rgba(255,255,255,.82)` | 1.1:1 → 8.7–10.3:1 |
 | `.nbox` | `rgba(255,255,255,.92)` | 1.0:1 → 12.8:1 |
-| `.flane .fempty` | `rgba(0,0,0,.4)` | 1.9:1 → 4.3–5.8:1 |
+| `.flane .fempty` | `rgba(0,0,0,.4)` | 1.9:1 → 7.8–9.1:1 |
 
 A tag assigned to a foreman moves onto that foreman's colour band and takes a
 pale chip. In light mode that is black text on a pale chip and reads fine. In
@@ -180,6 +180,13 @@ been given to someone.
 The fix is dark-mode only; light mode is byte-for-byte as drawn. On the band the
 chip darkens rather than lightens, because the dark lane colours are mid-tone
 and carry the page's light text far better that way.
+
+The lane's "nothing here" hint could not be fixed by recolouring: white text
+straight on the teal band tops out at 4.25:1, under AA for small text. It gets
+the same dark backing as the chips beside it and reads against that instead of
+against the band, taking their padding so it lines up with them, and keeping no
+border and a dimmed white so it still reads as an absence rather than as another
+tag.
 
 `patch.py` takes `Gavin_schedule_MOBILE.snapshot.html` as input and never edits
 it. Every edit is anchored on text that must exist; a missing anchor is a hard

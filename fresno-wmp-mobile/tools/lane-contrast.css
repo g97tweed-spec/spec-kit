@@ -24,13 +24,18 @@
 @media (prefers-color-scheme: dark){
   /* the assigned tag itself: dark chip, page's own light text */
   .flane .tag{background:rgba(0,0,0,.45)}
-  /* "nothing assigned yet" sat as near-black text on the dark band (1.9:1).
-     Full white is the best available without restyling the placeholder: it
-     reaches 5.75:1 on Alex, 4.45 on Jose, 4.25 on Thomas — the teal band is
-     the light one, so that last is a shade under AA's 4.5 for small text.
-     Clearing it outright would mean giving the hint its own backing rather
-     than recolouring it, which changes the layout, not just the colour. */
-  .flane .fempty{color:#fff}
+  /* The lane's "nothing here" hint — an em dash, or the word "filtered" — sat
+     as near-black text directly on the dark band at 1.9:1. Recolouring alone
+     could not clear AA: white text straight on the teal band tops out at
+     4.25:1, because that band is the light one of the three.
+
+     So it gets the same dark backing the chips beside it get, and reads
+     against that instead of against the band. It sits in the same row as
+     those chips, so it takes their padding too and lines up with them; it
+     keeps no border and a dimmed white, so it still reads as an absence
+     rather than as another tag. */
+  .flane .fempty{color:rgba(255,255,255,.86);background:rgba(0,0,0,.45);
+    padding:1px 4px}
   /* same defect, same cause, two lines away: the note chip in a day cell was a
      near-white box carrying the page's light text */
   .nbox{background:rgba(255,255,255,.08)}
