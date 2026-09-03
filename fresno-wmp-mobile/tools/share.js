@@ -189,7 +189,7 @@ function shareReapply(){
 }
 
 async function goShared(){
-  const db = await claude.use("db");
+  const db = await useCap("db");   /* guarded: see live.js */
   if(!db) return;                      /* opened as a file, or not granted */
   SHARE.db = db;
 

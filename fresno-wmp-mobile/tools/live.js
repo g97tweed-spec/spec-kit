@@ -66,6 +66,20 @@ const LIVE = {
 };
 function liveUri(src){ return "file:///"+src.drive+"/"+src.root+"/"+src.file; }
 
+/* `claude` is a global the artifact viewer injects. Opened as a file straight
+   from OneDrive there is no such identifier AT ALL, and a bare reference throws
+   ReferenceError rather than yielding undefined — which surfaced as "Refresh
+   failed to start: claude is not defined" across the top of the board instead
+   of the honest snapshot banner. Reached through window, and guarded, so an
+   absent runtime is the ordinary no-capability path. */
+async function useCap(name){
+  try{
+    const c = (typeof window !== "undefined") ? window.claude : null;
+    if(!c || typeof c.use !== "function") return null;
+    return await c.use(name);
+  }catch(e){ return null; }
+}
+
 /* ---------- the freshness line -------------------------------------------
    Replaces the old "Snapshot is N days old" bar. Three honest states, never
    one generic "couldn't update" — each names the thing that would fix it. */
@@ -352,7 +366,7 @@ async function goLive(){
     snapshotBar();
   }
 
-  const mcp=await claude.use("mcp");
+  const mcp=await useCap("mcp");
   if(!mcp){
     if(LIVE.state==="cached"){
       setBar("warn","<b>Offline copy.</b> Saved on this device "+ago(new Date(cached.at).toISOString())+
