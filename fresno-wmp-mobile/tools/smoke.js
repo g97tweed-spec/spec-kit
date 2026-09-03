@@ -112,7 +112,12 @@ function counts(dom) {
 }
 
 async function run() {
-  const DAY = "2026-09-02";
+  /* The board opens on the device's today, so the fixture has to use the same
+     day the board will compute — a hardcoded date passes until midnight and
+     then starts failing for a reason that has nothing to do with the code. */
+  const n = new Date();
+  const DAY = n.getFullYear() + "-" + String(n.getMonth() + 1).padStart(2, "0")
+            + "-" + String(n.getDate()).padStart(2, "0");
 
   /* ---- 1. live read succeeds ------------------------------------------- */
   console.log("\n1. connector answers with a fresh payload");

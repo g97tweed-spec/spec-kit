@@ -21,6 +21,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 ROOT = HERE.parent
 LIVE = HERE / "live.js"
+SHARE = HERE / "share.js"
 CSS = HERE / "live.css"
 
 DEFAULT_SRC = ROOT / "Gavin_schedule_MOBILE.snapshot.html"
@@ -76,8 +77,10 @@ PAGES = [
   cur=monthIndexFor(TODAY);
   selDay=defaultDay();
   render();
+  try{ await goShared(); }catch(e){ /* board still works on this device */ }
   try{
     await goLive();
+    shareReapply();
     /* The live feed can move a tag to a different day, so the opening day is
        re-picked once — but only while the user is still on the day the board
        chose for them. Never yank the view out from under a deliberate tap. */
@@ -101,8 +104,10 @@ PAGES = [
         "boot_old": "load().then(()=>{render();staleBanner();});",
         "boot_new": """load().then(async()=>{
   render();
+  try{ await goShared(); }catch(e){ /* board still works on this device */ }
   try{
     await goLive();
+    shareReapply();
     /* The desk board shows a whole month at a time, so a feed that moves a tag
        between days changes what is in the grid but not which grid to show. It
        is repainted, not repositioned — goLive() has already done that. */
@@ -176,7 +181,7 @@ def main(argv):
     frag = src.parent / (stem + ".artifact.html")
 
     html = src.read_text(encoding="utf-8")
-    live = LIVE.read_text(encoding="utf-8")
+    live = LIVE.read_text(encoding="utf-8") + "\n\n" + SHARE.read_text(encoding="utf-8")
     page = identify(html)
     preflight(html, page["needs"])
 

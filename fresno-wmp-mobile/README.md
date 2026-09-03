@@ -127,6 +127,40 @@ Crew lane assignments are the foreman's, not the pipeline's, and are keyed by
 notification so a refresh never re-lanes anyone's day — including for tags that
 arrived with the feed and were never in the snapshot.
 
+## Shared board state
+
+Lanes and notes used to live in this browser's localStorage, so they never left
+the device they were typed on — not to a colleague, not even from the phone to
+the desk. `tools/share.js` moves them into the artifact's shared store, so
+everyone who opens a board sees the same assignments and anyone who can open it
+can change them.
+
+| | where it lives | why |
+|---|---|---|
+| lanes, day/month notes, resources, vendor and field notes | shared store | a decision about the work |
+| collapsed sections, expanded job packages | this device | view state — sharing it would rearrange someone else's screen |
+
+Two documents, not one per tag: an artifact's store holds 5,000 documents in
+total and a per-tag scheme would spend a quarter of that on one board. Both stay
+far inside the 256 KiB body cap — ~1,200 assignments is about 50 KB.
+
+Both are keyed maps written with `update()`, whose nested merge applies one key
+without touching the rest, so **two people moving two different tags merge
+cleanly**. The same tag at the same moment is last-writer-wins, which for one
+tag and two foremen is the right answer anyway.
+
+Every path the board already uses to persist a change ends in `save()`, so
+sharing is wired in by wrapping that one function and diffing against the last
+push — no call site had to learn about it. A feed landing rebuilds `state.place`
+from `PRESET`, so `shareReapply()` puts the shared lanes back on top afterwards
+and re-baselines the diff.
+
+**When it is not there** — opened as a file from OneDrive, or granted to a
+view-only viewer — the board keeps its own state on the device exactly as
+before, and says so on a line under the freshness banner. The field board's
+routine "Saved on this device" toast is rewritten while sharing is down, because
+on its own that reads like success.
+
 ## Build
 
 ```bash
